@@ -122,11 +122,14 @@ def search(
         for original, prepared in zip(needles_original, needles):
             for start in _kmp_find_all(source, prepared):
                 merged.append((start, original))
-            merged.sort(key=lambda item: item[0], reverse=method == "last")
+
+        merged.sort(key=lambda item: item[0], reverse=(method == "last"))
         selected = merged[:count]
+
         grouped: Dict[str, List[int]] = {item: [] for item in needles_original}
         for position, needle_name in selected:
             grouped[needle_name].append(position)
+
         result = {key: (tuple(value) if value else None) for key, value in grouped.items()}
 
     if all(item is None for item in result.values()):
@@ -178,10 +181,20 @@ def highlight_matches(
     max_lines: int = MAX_OUTPUT_LINES,
 ) -> str:
     """Возвращает текст с ANSI-подсветкой найденных подстрок."""
-    lines = text.splitlines()
-    if not lines:
+    if not text:
         return ""
-    text = "\n".join(lines[:max_lines])
+
+    pos = 0
+    line_count = 0
+    while line_count < max_lines and pos < len(text):
+        next_nl = text.find("\n", pos)
+        if next_nl == -1:
+            pos = len(text)
+            break
+        pos = next_nl + 1
+        line_count += 1
+
+    text = text[:pos]
     spans = _build_spans(text, substrings, case_sensitivity)
     if not spans:
         return text
@@ -203,7 +216,10 @@ def highlight_matches(
 def _parse_substrings(raw_substrings: Sequence[str]) -> List[str]:
     parsed: List[str] = []
     for item in raw_substrings:
-        parsed.extend(part for part in item.split(",") if part != "")
+        if item == "":
+            parsed.append("")
+        else:
+            parsed.extend(part for part in item.split(",") if part != "")
     if not parsed:
         raise ValueError("At least one substring must be provided")
     return parsed
@@ -254,7 +270,7 @@ def _run_cli(arguments: Optional[Sequence[str]] = None) -> int:
     parser = _make_parser()
     args = parser.parse_args(arguments)
 
-    if bool(args.string) == bool(args.file):
+    if (args.string is not None) == (args.file is not None):
         parser.error("Specify exactly one source: --string or --file")
 
     substrings = _parse_substrings(args.substring)
